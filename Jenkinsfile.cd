@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(
+            name: 'BUILD_NUMBER',
+            defaultValue: '',
+            description: 'Successful CI-React-App build number'
+        )
+
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['DEV', 'TEST', 'ACC', 'PROD'],
+            description: 'Deployment environment'
+        )
+    }
+
+    stages {
+        stage('Download Artifact') {
+            steps {
+                copyArtifacts(
+                    projectName: 'CI-React-App',
+                    selector: specific(params.BUILD_NUMBER),
+                    filter: 'react-app-*.tar.gz'
+                )
+            }
+        }
+
+        stage('Prepare Files') {
+            steps {
+                sh 'rm -rf deploy && mkdir deploy'
+
+                sh """
+                    tar -xzf react-app-${params.BUILD_NUMBER}.tar.gz -C deploy
+                """
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def imageName = "react-app-${params.ENVIRONMENT.toLowerCase()}-${params.BUILD_NUMBER}"
+
+                    sh "docker build -t ${imageName} deploy"
+                }
+            }
+        }
+
+        stage('Deploy to Docker') {
+            steps {
+                script {
+                    def environment = params.ENVIRONMENT.toLowerCase()
+                    def imageName = "react-app-${environment}-${params.BUILD_NUMBER}"
+                    def containerName = "react-${environment}"
+
+                    def ports = [
+                        DEV: 8081,
+                        TEST: 8082,
+                        ACC: 8083,
+                        PROD: 8084
+                    ]
+
+                    def hostPort = ports[params.ENVIRONMENT]
+
+                    sh "docker rm -f ${containerName} || true"
+
+                    sh """
+                        docker run -d \
+                        --name ${containerName} \
+                        -p ${hostPort}:80 \
+                        ${imageName}
+                    """
+                }
+            }
+        }
+    }
+}
