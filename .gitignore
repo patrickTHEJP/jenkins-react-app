@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local Jenkins backups (contains sensitive data)
+jenkins-backup/
+jenkins-docker-image/
